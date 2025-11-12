@@ -2,17 +2,15 @@
 // Replace with your Mapbox access token:
 mapboxgl.accessToken = 'pk.eyJ1IjoibmF0aGFuMTIzMzIxIiwiYSI6ImNtaHdha3M3aTAwa2EyaXF2emMzNXppeHAifQ.huVmBRTtNeNStubIFhWIXw';
 
-// Create the map
 const map = new mapboxgl.Map({
   container: 'map',
-  style: 'mapbox://styles/mapbox/light-v11', // non-satellite
-  center: [0, 20], // initial position
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: [0, 20],
   zoom: 1.5,
   pitch: 60,
   bearing: -45
 });
 
-// Add zoom/rotate controls
 map.addControl(new mapboxgl.NavigationControl());
 
 map.on('load', () => {
@@ -41,77 +39,88 @@ map.on('load', () => {
       minzoom: 15,
       paint: {
         'fill-extrusion-color': '#aaa',
-        'fill-extrusion-height': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          15, 0,
-          15.05, ['get', 'height']
-        ],
-        'fill-extrusion-base': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          15, 0,
-          15.05, ['get', 'min_height']
-        ],
+        'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
+        'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
         'fill-extrusion-opacity': 0.6
       }
     },
     labelLayerId
   );
 
-  // ----- Photo memories -----
+  // ----- Photo memories with multiple images per year -----
   const memories = [
-    {
-      city: 'Jerusalem',
-      coords: [35.235, 31.776],
-      photo: 'jerusalem.jpg',
-      caption: 'Mount of Olives, 2023'
-    },
-    {
-      city: 'London',
-      coords: [-0.1276, 51.5072],
-      photo: 'london.jpg',
-      caption: 'A rainy afternoon in London'
-    }
+    // Year 2023 - Jerusalem (duplicate same image to simulate multiple photos)
+    { coords: [35.235, 31.776], photo: 'jerusalem.jpg', caption: 'Mount of Olives 1', year: 2023 },
+    { coords: [35.435, 31.876], photo: 'jerusalem.jpg', caption: 'Mount of Olives 2', year: 2023 },
+    { coords: [35.215, 31.776], photo: 'jerusalem.jpg', caption: 'Mount of Olives 3', year: 2023 },
+
+    // Year 2022 - London (duplicate same image to simulate multiple photos)
+    { coords: [-0.1576, 51.5072], photo: 'london.jpg', caption: 'Rainy London 1', year: 2022 },
+    { coords: [-0.1276, 51.5172], photo: 'london.jpg', caption: 'Rainy London 2', year: 2022 },
+    { coords: [-0.1476, 51.5072], photo: 'london.jpg', caption: 'Rainy London 3', year: 2022 }
   ];
 
-  // ----- Automatic flyover (no markers) -----
-  let i = 0;
+  // ----- Flyover variables -----
+  let currentFlyover = null;
 
-  function flyToNext() {
-    const m = memories[i];
+  function startFlyover(selectedYear) {
+    // Filter memories by selected year
+    const filtered = memories.filter(m => m.year === selectedYear);
+    if (filtered.length === 0) return;
 
-    // Fly to this memory’s coordinates
-    map.flyTo({
-      center: m.coords,
-      zoom: 14,
-      pitch: 60,
-      bearing: Math.random() * 360,
-      speed: 0.6,
-      curve: 1.4,
-      essential: true
-    });
+    let i = 0;
 
-    // Remove any existing popup and show this one after 4s
-    setTimeout(() => {
+    // Stop previous flyover
+    if (currentFlyover) clearTimeout(currentFlyover);
+
+    function flyToNext() {
+      const m = filtered[i];
+      map.flyTo({
+        center: m.coords,
+        zoom: 14,
+        pitch: 60,
+        bearing: Math.random() * 360,
+        speed: 0.6,
+        curve: 1.4,
+        essential: true
+      });
+
+      // Remove old popups
       document.querySelectorAll('.mapboxgl-popup').forEach(p => p.remove());
+
+      // Add new popup
       new mapboxgl.Popup({ offset: 25, closeButton: false, closeOnClick: false })
         .setLngLat(m.coords)
-        .setHTML(`
-          <div style="text-align:center;">
-            <img src="${m.photo}" style="width:200px;border-radius:10px;">
-            <p>${m.caption}</p>
-          </div>
-        `)
+        .setHTML(`<div style="text-align:center;">
+                    <img src="${m.photo}" style="width:200px;border-radius:10px;">
+                    <p>${m.caption} (${m.year})</p>
+                  </div>`)
         .addTo(map);
-    }, 4000);
 
-    // Next memory
-    i = (i + 1) % memories.length;
-    setTimeout(flyToNext, 8000); // Move to next memory after 8s
+      i = (i + 1) % filtered.length;
+      currentFlyover = setTimeout(flyToNext, 5000); // cycle every 5 seconds
+    }
+
+    flyToNext();
   }
 
-  setTimeout(flyToNext, 2000); // Start after 2s
+  // ----- Add Year Buttons -----
+  const years = [...new Set(memories.map(m => m.year))];
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.position = 'absolute';
+  buttonContainer.style.top = '10px';
+  buttonContainer.style.left = '10px';
+  buttonContainer.style.zIndex = 1;
+  document.body.appendChild(buttonContainer);
+
+  years.forEach(y => {
+    const btn = document.createElement('button');
+    btn.textContent = y;
+    btn.style.margin = '2px';
+    btn.onclick = () => startFlyover(y);
+    buttonContainer.appendChild(btn);
+  });
+
+  // Start flyover automatically with the first year
+  startFlyover(years[0]);
 });
