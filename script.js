@@ -47,40 +47,65 @@ map.on('load', () => {
     labelLayerId
   );
 
-  // ----- Photo memories with multiple images per year -----
+  // ----- Photo memories -----
   const memories = [
-    // Year 2023 - Jerusalem (duplicate same image to simulate multiple photos)
+    // 2023 - Jerusalem (slightly different coordinates for each photo)
     { coords: [35.235, 31.776], photo: 'jerusalem.jpg', caption: 'Mount of Olives 1', year: 2023 },
-    { coords: [35.435, 31.876], photo: 'jerusalem.jpg', caption: 'Mount of Olives 2', year: 2023 },
-    { coords: [35.215, 31.776], photo: 'jerusalem.jpg', caption: 'Mount of Olives 3', year: 2023 },
+    { coords: [35.2345, 31.7755], photo: 'jerusalem.jpg', caption: 'Western Wall', year: 2023 },
+    { coords: [35.236, 31.777], photo: 'jerusalem.jpg', caption: 'Old City Street', year: 2023 },
+    
+    // 2022 - London
+    { coords: [-0.1276, 51.5072], photo: 'london.jpg', caption: 'Rainy London 1', year: 2022 },
+    { coords: [-0.128, 51.5075], photo: 'london.jpg', caption: 'Tower Bridge', year: 2022 },
+    { coords: [-0.1265, 51.5065], photo: 'london.jpg', caption: 'Big Ben', year: 2022 }
+    ];
 
-    // Year 2022 - London (duplicate same image to simulate multiple photos)
-    { coords: [-0.1576, 51.5072], photo: 'london.jpg', caption: 'Rainy London 1', year: 2022 },
-    { coords: [-0.1276, 51.5172], photo: 'london.jpg', caption: 'Rainy London 2', year: 2022 },
-    { coords: [-0.1476, 51.5072], photo: 'london.jpg', caption: 'Rainy London 3', year: 2022 }
-  ];
+
+  // ----- Create fullscreen modal -----
+  const modal = document.createElement('div');
+  modal.style.position = 'fixed';
+  modal.style.top = 0;
+  modal.style.left = 0;
+  modal.style.width = '100%';
+  modal.style.height = '100%';
+  modal.style.backgroundColor = 'rgba(0,0,0,0.9)';
+  modal.style.display = 'none';
+  modal.style.justifyContent = 'center';
+  modal.style.alignItems = 'center';
+  modal.style.zIndex = 10000;
+  const modalImg = document.createElement('img');
+  modalImg.style.maxWidth = '95%';
+  modalImg.style.maxHeight = '95%';
+  modal.appendChild(modalImg);
+  document.body.appendChild(modal);
 
   // ----- Flyover variables -----
   let currentFlyover = null;
+  let filteredMemories = [];
+  let i = 0;
+  let paused = false;
 
   function startFlyover(selectedYear) {
-    // Filter memories by selected year
-    const filtered = memories.filter(m => m.year === selectedYear);
-    if (filtered.length === 0) return;
+    filteredMemories = memories.filter(m => m.year === selectedYear);
+    if (filteredMemories.length === 0) return;
 
-    let i = 0;
+    i = 0;
+    paused = false;
 
-    // Stop previous flyover
     if (currentFlyover) clearTimeout(currentFlyover);
 
     function flyToNext() {
-      const m = filtered[i];
+      if (paused) return;
+
+      const m = filteredMemories[i];
+
+      // Always fly for smooth animation
       map.flyTo({
         center: m.coords,
         zoom: 14,
         pitch: 60,
         bearing: Math.random() * 360,
-        speed: 0.6,
+        speed: 0.4,
         curve: 1.4,
         essential: true
       });
@@ -88,39 +113,89 @@ map.on('load', () => {
       // Remove old popups
       document.querySelectorAll('.mapboxgl-popup').forEach(p => p.remove());
 
-      // Add new popup
-      new mapboxgl.Popup({ offset: 25, closeButton: false, closeOnClick: false })
+      // Show popup
+      const imgHtml = `<img src="${m.photo}" style="width:400px;border-radius:10px;cursor:pointer;">`;
+      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false, closeOnClick: false })
         .setLngLat(m.coords)
-        .setHTML(`<div style="text-align:center;">
-                    <img src="${m.photo}" style="width:200px;border-radius:10px;">
-                    <p>${m.caption} (${m.year})</p>
-                  </div>`)
+        .setHTML(`<div style="text-align:center;">${imgHtml}<p>${m.caption} (${m.year})</p></div>`)
         .addTo(map);
 
-      i = (i + 1) % filtered.length;
-      currentFlyover = setTimeout(flyToNext, 5000); // cycle every 5 seconds
+      // Click image to fullscreen & pause
+      const img = popup.getElement().querySelector('img');
+      img.addEventListener('click', () => {
+        paused = true;
+        modalImg.src = m.photo;
+        modal.style.display = 'flex';
+      });
+
+      // Schedule next fly
+      i = (i + 1) % filteredMemories.length;
+      currentFlyover = setTimeout(flyToNext, 8000);
     }
 
     flyToNext();
   }
 
-  // ----- Add Year Buttons -----
-  const years = [...new Set(memories.map(m => m.year))];
+  // ----- Close modal & resume flyover -----
+  modal.addEventListener('click', () => {
+    modal.style.display = 'none';
+    paused = false;
+    // Resume from current photo
+    startFlyover(filteredMemories[i].year);
+  });
+
+  // ----- Add Year Buttons (styled) -----
+  const years = [...new Set(memories.map(m => m.year))].sort((a, b) => a - b); // oldest -> newest
   const buttonContainer = document.createElement('div');
   buttonContainer.style.position = 'absolute';
   buttonContainer.style.top = '10px';
-  buttonContainer.style.left = '10px';
+  buttonContainer.style.left = '50%';
+  buttonContainer.style.transform = 'translateX(-50%)';
   buttonContainer.style.zIndex = 1;
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.gap = '8px';
+  buttonContainer.style.padding = '6px 10px';
+  buttonContainer.style.background = 'white';
+  buttonContainer.style.borderRadius = '8px';
+  buttonContainer.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
   document.body.appendChild(buttonContainer);
+
+  let selectedYearBtn = null;
 
   years.forEach(y => {
     const btn = document.createElement('button');
     btn.textContent = y;
-    btn.style.margin = '2px';
-    btn.onclick = () => startFlyover(y);
+    btn.style.padding = '6px 12px';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '6px';
+    btn.style.cursor = 'pointer';
+    btn.style.background = 'transparent';
+    btn.style.transition = '0.2s';
+    btn.style.fontWeight = 'bold';
+    btn.style.color = '#333';
+
+    btn.addEventListener('mouseover', () => btn.style.background = '#f0f0f0');
+    btn.addEventListener('mouseout', () => {
+      if (btn !== selectedYearBtn) btn.style.background = 'transparent';
+    });
+
+    btn.onclick = () => {
+      startFlyover(y);
+
+      // Highlight selected year
+      if (selectedYearBtn) {
+        selectedYearBtn.style.background = 'transparent';
+        selectedYearBtn.style.color = '#333';
+      }
+      btn.style.background = '#007bff';
+      btn.style.color = 'white';
+      selectedYearBtn = btn;
+    };
+
     buttonContainer.appendChild(btn);
   });
 
-  // Start flyover automatically with the first year
-  startFlyover(years[0]);
+  // Automatically select the first year
+  const firstBtn = buttonContainer.querySelector('button');
+  firstBtn.click();
 });
